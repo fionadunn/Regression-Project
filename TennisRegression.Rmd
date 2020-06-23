@@ -26,6 +26,7 @@ tennis_data_cleaned <- tennis_2013_2017_GS %>%
 ```
 
 EDA Histogram
+We later picked w_pointswon to be our response with the following filters
 ```{r}
 tennis_data_cleaned %>%
   filter(w_pointswon > 50 & w_pointswon < 200) %>%
@@ -88,62 +89,8 @@ cor(tennis_data_cleaned$w_pointswon, tennis_data_cleaned$l_n_sv)
 ```
 
 
-Just a sample lm to practice but does have decently strong correlation
-```{r}
-
-idea1 <- lm(w_n_winners ~ w_n_sv + l_n_ue, data = tennis_data_cleaned)
-
-summary(idea1)
-
-library(car)
-vif(idea1)
-```
-
-
-checking normality
-```{r}
-library(ggfortify)
-autoplot(idea1) +
-  theme_bw()
-```
-
-training data practice. plot looks a little hectic...
-```{r}
-train_preds_1 <- predict(idea1)
-train_preds_1
-
-## also equal to 
-idea1$fitted.values
-
-
-tennis_data_cleaned %>%
-  tibble(x = (l_n_sv + l_n_ue), y = l_n_winners,
-       preds = train_preds_1) %>%
-  ggplot(aes((l_n_sv + l_n_ue))) + 
-  geom_point(aes(y = l_n_winners)) + 
-  geom_point(aes(y = preds),
-             color = "red") +
-  geom_smooth(aes(y = preds),
-            linetype = "dashed",
-            color = "blue") +
-  theme_bw()
-```
-
-another general plot, not incredibly useful 
-```{r}
-tennis_data_cleaned %>%
-  tibble(x = (l_n_sv + l_n_ue), y = l_n_winners) %>%
-  ggplot(aes(x, y)) + 
-  geom_point() + 
-  stat_smooth(method = "lm") +
-  theme_bw()
-
-
-var(predict(idea1)) / var(tennis_data_cleaned$l_n_winners)
-```
-
-
 VARIABLE SELECTION
+can see that w_n_sv_w, w_n_sv, l_n_sv, l_n_sv_w are all high cor 
 ```{r}
 library(ggcorrplot)
 tennis_model_data <- tennis_data_cleaned %>%
@@ -169,6 +116,7 @@ ggcorrplot(round_cor_matrix,
 
 
 clustering using matrix (using w_n_winners as y)
+clear that w_n_sv_w, w_n_sv, l_n_sv, l_n_sv_w are all correlated to each other as expected
 ```{r}
 
 tennis_ex_vars <- dplyr::select(tennis_model_data, -w_pointswon)
@@ -197,6 +145,7 @@ cor_dist_matrix %>%
 ```
 
 Pairs Plot
+Clear that w_n_sv_w and w_gameswon are highly corr
 ```{r}
 library(GGally)
 tennis_data_linear <- tennis_data_cleaned %>% 
@@ -222,16 +171,52 @@ vif(init_w_pointswon)
 
 Training data
 ```{r}
-train_preds <- predict(init_w_pointswon)
-train_preds
-
-tennis_data_linear %>%
-  tibble(x = (w_n_winners + w_n_ue + l_n_ue + w_gameswon), y = w_pointswon,
-       preds = predict(init_w_pointswon)) %>%
-  ggplot(aes(x)) + 
-  geom_point(aes(y = w_pointswon)) + 
-  geom_point(aes(y = preds),
-             color = "red") +
-  theme_bw()
+set.seed(4345)
+n_players <- nrow(tennis_data_linear)
+train_i <- sample(n_players, n_players * 0.7, replace = FALSE)
+test_i <- (1:n_players)[-train_i]
+tennis_train <- tennis_data_linear[train_i,]
+tennis_test <- tennis_data_linear[test_i,]
 ```
+
+Here we came up with a few models that would predict w_pointswon
+```{r}
+candidate_model_1 <-  lm(w_pointswon ~ w_n_winners + w_n_ue + l_n_ue + w_gameswon, tennis_train)
+
+candidate_model_2 <- lm(w_pointswon ~ w_n_winners + w_n_ue + l_n_ue,
+                        data = tennis_train)
+
+candidate_model_3 <-lm(w_pointswon ~ w_n_winners + w_n_ue + Tour + l_n_ue + w_gameswon, tennis_train)
+
+candidate_model_3 <-lm(w_pointswon ~ w_n_winners + w_n_ue + Tour + l_n_ue + w_gameswon, tennis_train)
+
+candidate_model_4 <-lm(w_pointswon ~ w_n_winners + Tour*tournament + w_n_ue + l_n_ue + w_gameswon, tennis_train)
+summary(candidate_model_4)
+
+candidate_model_5 <-  lm(w_pointswon ~ w_n_winners + w_n_ue + l_n_ue + w_n_sv_w, tennis_train)
+summary(candidate_model_5)
+```
+
+Checking MSE
+
+Model 2 has a much higer MSE so no need to move further with it.
+```{r}
+model_1_preds <- predict(candidate_model_1, newdata = tennis_test)
+model_1_mse <- mean((model_1_preds - tennis_test$w_pointswon)^2)
+model_1_mse
+
+model_2_preds <- predict(candidate_model_2, newdata = tennis_test)
+model_2_mse <- mean((model_2_preds - tennis_test$w_pointswon)^2)
+model_2_mse
+
+model_3_preds <- predict(candidate_model_3, newdata = tennis_test)
+model_3_mse <- mean((model_3_preds - tennis_test$w_pointswon)^2)
+model_3_mse
+
+
+model_4_preds <- predict(candidate_model_4, newdata = tennis_test)
+model_4_mse <- mean((model_4_preds - tennis_test$w_pointswon)^2)
+model_4_mse
+```
+
 
